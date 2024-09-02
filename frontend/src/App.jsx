@@ -8,7 +8,6 @@ function App() {
   const [remotePeerIdValue, setRemotePeerIdValue] = useState('');
   const [peers, setPeers] = useState([]);
   const remoteVideoRef = useRef(null);
-  const currentUserVideoRef = useRef(null);
   const peerInstance = useRef(null);
 
   useEffect(() => {
@@ -23,8 +22,6 @@ function App() {
       if(!navigator.getUserMedia) console.log("User Media permission not available") 
       navigator.getUserMedia({ video: false, audio: true }, (mediaStream) => {
         console.log('calling site :>> ', mediaStream); 
-        // currentUserVideoRef.current.srcObject = mediaStream;
-        // currentUserVideoRef.current.play();
         setPeers((peers) => [...peers, { userId: mediaStream.id }]);
         call.answer(mediaStream)
         call.on('stream', function(remoteStream) {
@@ -50,8 +47,6 @@ function App() {
     if(!navigator.getUserMedia) console.log("navigator.getUserMedia not available")
  
     navigator.getUserMedia({ video: false, audio: true }, (mediaStream) => {
-      // currentUserVideoRef.current.srcObject = mediaStream;
-      // currentUserVideoRef.current.play();
 
       const call = peerInstance.current.call(remotePeerId, mediaStream)
 
