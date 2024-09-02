@@ -3,8 +3,10 @@ const cors = require('cors');
 const path = require('path');
 const connectDB = require('./config/db');
 const app = express();
+const fs = require('fs');
 const http = require('http');
 const { Server } = require("socket.io")
+const { ExpressPeerServer } = require('peerjs');
 // Connect to the database
 connectDB();
 
@@ -17,8 +19,9 @@ app.use(require("morgan")(':remote-addr - :remote-user - [:date[clf]] - ":method
 app.use('/uploads', express.static('uploads'));
 app.use('/uploads/music', express.static(path.join(__dirname, 'uploads/music'))); // Serve music files
 app.use('/uploads/image', express.static(path.join(__dirname, 'uploads/image'))); // Serve music files
-
-
+// use express static to deliver resources HTML, CSS, JS, etc)
+// from the public folder
+app.use(express.static('public'));
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/songs', require('./routes/songRoutes'));
@@ -39,7 +42,7 @@ const io = new Server(server,{
 const rooms = [];
 
 io.on('connection', (socket) => {
-    console.log('New client connected');
+    console.log('New client connected ',socket.id);
   
     socket.on('create-room', () => {
       const roomId = socket.id; // Use socket ID as room ID
@@ -49,6 +52,7 @@ io.on('connection', (socket) => {
     });
   
     socket.on('join-room', (roomId) => {
+        console.log('roomId :>> ', roomId); 
       if (rooms[roomId]) {
         rooms[roomId].push(socket.id);
         socket.join(roomId);
