@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Peer from 'peerjs';
 import './App.css';
 import { FaRegCopy } from "react-icons/fa";
@@ -7,9 +7,12 @@ function App() {
   const [peerId, setPeerId] = useState('');
   const [remotePeerIdValue, setRemotePeerIdValue] = useState('');
   const [peers, setPeers] = useState([]);
-  const remoteVideoRef = useRef(null);
+  const [joined, setJoined] = useState(null);
+  const remoteAudioRef = useRef(null);
   const peerInstance = useRef(null);
-
+  const [calls, setCalls] = useState(null);
+  const [localStream, setLocalStream] = useState(null);
+  
   useEffect(() => {
     const peer = new Peer();
 
@@ -22,17 +25,70 @@ function App() {
       if(!navigator.getUserMedia) console.log("User Media permission not available") 
       navigator.getUserMedia({ video: false, audio: true }, (mediaStream) => {
         console.log('calling site :>> ', mediaStream); 
-        setPeers((peers) => [...peers, { userId: mediaStream.id }]);
+        setPeers((peers) => [...peers, { userId: call.peer }]);
         call.answer(mediaStream)
         call.on('stream', function(remoteStream) {
-          remoteVideoRef.current.srcObject = remoteStream
-          remoteVideoRef.current.play();
+          // add html and cavas elements
+          // setCalls(call);
+          console.log('remoteStream :>> ', remoteStream); 
+          remoteAudioRef.current.srcObject = remoteStream
+          remoteAudioRef.current.play();
         });
+        
+        call.on('close', (data) =>{
+          console.log('close on stream:>> ', data); 
+        })
       });
     })
 
     peerInstance.current = peer;
-  }, [])
+
+    // Clean up when component unmounts
+    return () => {
+      if (peerInstance) {
+        console.log("Clean up when component unmounts")
+        peerInstance.current.destroy();
+      }
+    };
+  }, [setJoined])
+
+  const call = (remotePeerId) => {
+    navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+    if(!navigator.getUserMedia) console.log("navigator.getUserMedia not available")
+      navigator.getUserMedia({ video: false, audio: true }, (mediaStream) => {
+      setLocalStream(mediaStream);
+      mediaStream.userId = remotePeerId;
+      const call = peerInstance.current.call(remotePeerId, mediaStream)
+      setJoined({ userId: remotePeerId });
+      setCalls(call);
+      call.on('stream', (remoteStream) => {
+        remoteAudioRef.current.srcObject = remoteStream
+        remoteAudioRef.current.play();
+      });
+
+      call.on('close', (data) =>{
+        console.log('close on local:>> ', data); 
+        // leaveChannal(peerId);
+      })
+    },
+    (err) => console.log('error :>> ', err));
+  }
+
+  const leaveChannal = useCallback((peerId)=> {
+    alert(`Leave channel: ${peerId}`)
+    if (calls) {
+      calls.close(peerId);
+      setCalls(null);
+    }
+    setJoined(null)
+    setPeers((peers) => peers?.filter(ele => ele.userId !== peerId));
+    // if (remoteAudioRef.current) {
+    //   const tracks = remoteAudioRef.current?.getTracks();
+    //   tracks?.forEach(track => track.stop());
+    //   remoteAudioRef.current.srcObject = null;
+    //   remoteAudioRef.current = null;
+    // }
+  })
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(peerId).then(() => {
@@ -41,23 +97,6 @@ function App() {
       alert('Failed to copy Room ID.');
     });
   };
-
-  const call = (remotePeerId) => {
-    navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
-    if(!navigator.getUserMedia) console.log("navigator.getUserMedia not available")
- 
-    navigator.getUserMedia({ video: false, audio: true }, (mediaStream) => {
-
-      const call = peerInstance.current.call(remotePeerId, mediaStream)
-
-      call.on('stream', (remoteStream) => {
-        console.log('remoteStream :>> ', remoteStream);
-        remoteVideoRef.current.srcObject = remoteStream
-        remoteVideoRef.current.play();
-      });
-    },
-    (err) => console.log('error :>> ', err));
-  }
 
   return (
     <>
@@ -87,13 +126,20 @@ function App() {
         className="bg-cyan-100 border border-gray-300 rounded-md p-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
         required
       />
-
+      {joined ? 
+      <button 
+      onClick={() => leaveChannal(joined.userId)} 
+      className="ml-2 bg-gray-500 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-opacity-50"
+      >
+      Leave
+    </button>  :
       <button 
         onClick={() => call(remotePeerIdValue)} 
         className="ml-2 bg-cyan-500 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-cyan-600 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-opacity-50"
       >
         Call
       </button>
+      }
 
       <div className="space-y-4">
         {peers.map((peerObj, index) => (
@@ -102,9 +148,16 @@ function App() {
           </div>
         ))}
       </div>
-      {peers.length === 0 && (
+      <div className="space-y-4">
+    
+      </div>
+      {peers.length === 0 && !joined && (
         <p className="text-center text-gray-500 mt-8">Waiting for other users to join...</p>
       )}
+      <div>
+        <audio ref={remoteAudioRef} />
+        {/* <video controls src="http://192.168.1.241:5000/uploads/music/bandicam%202024-05-16%2022-31-17-026.mp4"></video> */}
+      </div>
     </div>
     </div>
     </>
