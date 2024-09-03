@@ -11,6 +11,8 @@ function App() {
   const [mode, setMode] = useState('meeting'); // State to handle mode selection
   const remoteAudioRef = useRef(null);
   const peerInstance = useRef(null);
+  const [loading, setLoading] = useState(false);
+  const [isButtonDisabled, setIsButtonDisabled] = useState(false); // State to disable the button
 
   useEffect(() => {
     const peer = new Peer();
@@ -30,7 +32,7 @@ function App() {
   const handleIncomingCall = (call) => {
     navigator.mediaDevices.getUserMedia({ video: false, audio: true })
       .then((mediaStream) => {
-        setPeers((prevPeers) => [...prevPeers, { userId: call.peer }]);
+        setPeers((prevPeers) => [...new Set([...prevPeers, call.peer ])]);
         call.answer(mediaStream);
         handleStream(call);
       })
@@ -47,15 +49,23 @@ function App() {
   };
 
   const call = useCallback((remotePeerId) => {
-    navigator.mediaDevices.getUserMedia({ video: false, audio: true })
+    setTimeout(()=>{
+      navigator.mediaDevices.getUserMedia({ video: false, audio: true })
       .then((mediaStream) => {
         const call = peerInstance.current.call(remotePeerId, mediaStream);
-        setJoined({ userId: remotePeerId });
+        setJoined(remotePeerId);
         setCalls(call);
         handleStream(call);
       })
       .catch((err) => console.error('Error starting call:', err));
+    },800)
   }, []);
+
+  const handleConnectClick = useCallback(()=>{
+    setIsButtonDisabled(true); // Disable the button after it's clicked
+    setLoading(true);
+    call(remotePeerIdValue)
+  })
 
   const leaveChannel = useCallback((peerId) => {
     if (calls) {
@@ -68,7 +78,9 @@ function App() {
       remoteAudioRef.current.srcObject = null;
     }
     setJoined(null);
-    setPeers((prevPeers) => prevPeers.filter(peer => peer.userId !== peerId));
+    setPeers((prevPeers) => [...new Set(prevPeers)].filter(peer => peer !== peerId));
+    setIsButtonDisabled(false);
+    setLoading(false)
   }, [calls]);
 
   const copyToClipboard = () => {
@@ -114,25 +126,26 @@ function App() {
 
         {joined ? (
           <button 
-            onClick={() => leaveChannel(joined.userId)} 
+            onClick={() => leaveChannel(joined)} 
             className="ml-2 bg-gray-500 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-opacity-50"
           >
             Leave
           </button>
         ) : (
           <button 
-            onClick={() => call(remotePeerIdValue)} 
+            onClick={handleConnectClick} 
             className="ml-2 bg-cyan-500 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-cyan-600 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-opacity-50"
+            disabled={isButtonDisabled}
           >
-            Call
+            {loading ? `Connecting` : `Connect`}
           </button>
         )}
 
         </div>
         <div className="space-y-4 mt-6">
-          {peers.map((peerObj, index) => (
+          {peers.map((peerId, index) => (
             <div key={index} className="p-4 bg-blue-50 rounded-lg shadow-md">
-              <p className="font-semibold text-blue-700">User ID: {peerObj.userId}</p>
+              <p className="font-semibold text-blue-700">User ID: {peerId}</p>
             </div>
           ))}
         </div>
