@@ -9,10 +9,9 @@ function App() {
   const [peers, setPeers] = useState([]);
   const [joined, setJoined] = useState(null);
   const remoteAudioRef = useRef(null);
-  const peerInstance = useRef(null);
+  const [peerInstance, setPeerInstance] = useState(null);
   const [calls, setCalls] = useState(null);
-  const [localStream, setLocalStream] = useState(null);
-  
+    
   useEffect(() => {
     const peer = new Peer();
 
@@ -22,56 +21,79 @@ function App() {
 
     peer.on('call', (call) => {
       navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
-      if(!navigator.getUserMedia) console.log("User Media permission not available") 
-      navigator.getUserMedia({ video: false, audio: true }, (mediaStream) => {
-        console.log('calling site :>> ', mediaStream); 
-        setPeers((peers) => [...peers, { userId: call.peer }]);
-        call.answer(mediaStream)
-        call.on('stream', function(remoteStream) {
-          // add html and cavas elements
-          // setCalls(call);
-          console.log('remoteStream :>> ', remoteStream); 
-          remoteAudioRef.current.srcObject = remoteStream
-          remoteAudioRef.current.play();
-        });
-        
-        call.on('close', (data) =>{
-          console.log('close on stream:>> ', data); 
+      if(!navigator.getUserMedia) {
+        console.log("User Media permission not available") 
+        navigator.mediaDevices.getUserMedia({ video: false, audio: true })
+        .then(mediaStream=>{
+          setPeers((peers) => [...peers, { userId: call.peer }]);
+          call.answer(mediaStream)
+          console.log('calling site :>> ', mediaStream); 
+          call.on('stream', function(remoteStream) {
+            // add html and cavas elements
+            remoteAudioRef.current.srcObject = remoteStream
+            remoteAudioRef.current.play();
+          });
+          call.on('close', (data) => console.log('close on stream:>> ', data))
         })
-      });
+        .catch((err)=> console.log("err from peer =>", err));
+      }else{
+        navigator.getUserMedia({ video: false, audio: true }, (mediaStream) => {
+          setPeers((peers) => [...peers, { userId: call.peer }]);
+          call.answer(mediaStream)
+          console.log('calling site :>> ', mediaStream); 
+          call.on('stream', function(remoteStream) {
+            // add html and cavas elements
+            remoteAudioRef.current.srcObject = remoteStream
+            remoteAudioRef.current.play();
+          });
+          call.on('close', (data) => console.log('close on stream'))
+        }, (err)=> console.log('err :>> ', err));
+      }
     })
 
-    peerInstance.current = peer;
+    setPeerInstance(peer);
 
     // Clean up when component unmounts
     return () => {
       if (peerInstance) {
         console.log("Clean up when component unmounts")
-        peerInstance.current.destroy();
+        peerInstance.destroy();
       }
     };
-  }, [setJoined])
+  }, [])
 
   const call = (remotePeerId) => {
     navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
-    if(!navigator.getUserMedia) console.log("navigator.getUserMedia not available")
+    if(!navigator.getUserMedia) {
+      console.log("navigator.getUserMedia not available")
+      navigator.mediaDevices.getUserMedia({ video: false, audio: true})
+      .then(mediaStream=>{
+        mediaStream.userId = remotePeerId;
+        const call = peerInstance.call(remotePeerId, mediaStream)
+        setJoined({ userId: remotePeerId });
+        setCalls(call);
+        call.on('stream', (remoteStream) => {
+          remoteAudioRef.current.srcObject = remoteStream
+          remoteAudioRef.current.play();
+        });
+
+        call.on('close', (data) => console.log('close on local '))
+      })
+      .catch(err => console.log("error ", err))
+    }else{
       navigator.getUserMedia({ video: false, audio: true }, (mediaStream) => {
-      setLocalStream(mediaStream);
       mediaStream.userId = remotePeerId;
-      const call = peerInstance.current.call(remotePeerId, mediaStream)
+      const call = peerInstance.call(remotePeerId, mediaStream)
       setJoined({ userId: remotePeerId });
       setCalls(call);
       call.on('stream', (remoteStream) => {
         remoteAudioRef.current.srcObject = remoteStream
         remoteAudioRef.current.play();
       });
-
-      call.on('close', (data) =>{
-        console.log('close on local:>> ', data); 
-        // leaveChannal(peerId);
-      })
+      call.on('close', (data) => console.log('close on local:>> ', data))
     },
     (err) => console.log('error :>> ', err));
+    }
   }
 
   const leaveChannal = useCallback((peerId)=> {
@@ -79,15 +101,10 @@ function App() {
     if (calls) {
       calls.close(peerId);
       setCalls(null);
+      remoteAudioRef.current.srcObject = null
     }
     setJoined(null)
     setPeers((peers) => peers?.filter(ele => ele.userId !== peerId));
-    // if (remoteAudioRef.current) {
-    //   const tracks = remoteAudioRef.current?.getTracks();
-    //   tracks?.forEach(track => track.stop());
-    //   remoteAudioRef.current.srcObject = null;
-    //   remoteAudioRef.current = null;
-    // }
   })
 
   const copyToClipboard = () => {
