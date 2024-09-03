@@ -98,10 +98,21 @@ function App() {
 
   const leaveChannal = useCallback((peerId)=> {
     alert(`Leave channel: ${peerId}`)
+    if (remoteAudioRef.current && remoteAudioRef.current.srcObject) {
+      // Get the media stream from the audio element
+      const stream = remoteAudioRef.current.srcObject;
+    
+      // Stop all tracks (audio tracks in this case)
+      const tracks = stream.getTracks();
+      tracks.forEach(track => track.stop());
+    
+      // Clear the srcObject to disconnect the stream from the element
+      remoteAudioRef.current.srcObject = null;
+    }
+
     if (calls) {
       calls.close(peerId);
       setCalls(null);
-      remoteAudioRef.current.srcObject = null
     }
     setJoined(null)
     setPeers((peers) => peers?.filter(ele => ele.userId !== peerId));
