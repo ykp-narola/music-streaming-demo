@@ -1,19 +1,26 @@
 const express = require('express')
 const app = express()
-const server = require('http').Server(app)
+const fs = require('fs')
+// Load SSL certificate and key
+const options = {
+  key: fs.readFileSync('./server.key'),
+  cert: fs.readFileSync('./server.cert')
+};
+
+const server = require('http').createServer({}, app)
 const io = require('socket.io')(server, {
   cors: {
       origin: '*',
-      methods: ['GET', 'POST'],
-      credentials: true,
-      allowEIO3: true,
-  },
-  transport: ['websocket'],
+      methods: ['GET', 'POST']
+  }
 })
-const { v4: uuidV4 } = require('uuid')
 
 app.set('view engine', 'ejs')
 app.use(express.static('public'))
+
+app.get('/https', (req, res) => {
+  res.send('Hello, HTTPS!');
+});
 
 io.on('connection', socket => {
   console.log('New User connected :>> ', socket.id);
