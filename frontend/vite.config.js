@@ -9,12 +9,12 @@ const cert = fs.readFileSync(path.resolve(__dirname, 'server.crt'));
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  server: {
-    https: {
-      key,
-      cert,
-    },
-  },
+  // server: {
+  //   https: {
+  //     key,
+  //     cert,
+  //   },
+  // },
   define: {
     global: {}
   },
