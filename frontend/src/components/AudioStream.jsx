@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Peer from 'peerjs';
 import io from 'socket.io-client'; // Make sure you have this installed
 import { FaRegCopy } from "react-icons/fa";
+import { base } from '../utils/config';
 
 function AudioStream() {
     const socketRef = useRef(null);
@@ -18,36 +19,33 @@ function AudioStream() {
     
     useEffect(() => {
       // Initialize socket and peer
-
       const peer = new Peer();
       peer.on('open', (id) => {
         console.log('id :>> ', id);
         setPeerId(id);
       });
-  
       peerInstance.current = peer;
-  
       return () => peerInstance.current?.destroy();
     }, []);
   
     console.log('peers :>> ', peers);
     useEffect(()=>{
-      peerInstance.current.on('call', (call) => {
-        navigator.mediaDevices.getUserMedia({ video: false, audio: true })
-        .then((mediaStream) => {
-          // response to calling peer
-          call.answer(mediaStream);
-          const video = document.createElement('video')
-  
-          // and set video tag existing system
-          call.on('stream', userVideoStream => {
-            addVideoStream(video, userVideoStream)
-          })
-          // set in existing peer instance
-          setPeers((prevPeers) => ({ ...prevPeers, [call.peer]: call }));
-        })
-        .catch((err) => console.error('Error getting user media:', err));
-      });
+        peerInstance.current.on('call', (call) => {
+            navigator.mediaDevices.getUserMedia({ video: false, audio: true })
+            .then((mediaStream) => {
+            // response to calling peer
+            call.answer(mediaStream);
+            const video = document.createElement('video')
+    
+            // and set video tag existing system
+            call.on('stream', userVideoStream => {
+                addVideoStream(video, userVideoStream)
+            })
+            // set in existing peer instance
+            setPeers((prevPeers) => ({ ...prevPeers, [call.peer]: call }));
+            })
+            .catch((err) => console.error('Error getting user media:', err));
+        });
     }, [peers])
   
     function connectToNewUser (userId, stream) {
@@ -65,12 +63,20 @@ function AudioStream() {
   
     }
   
+    const disconnectedPeers = (userId) => {
+        if (peers[userId]) peers[userId].close()
+        setPeers((prevPeers) => {
+            const updatedPeers = { ...prevPeers };
+            delete updatedPeers[userId];
+            return updatedPeers;
+        });
+    }
     const call = useCallback((remotePeerId) => {
       setLoading(true);  
       setTimeout(() => {
         navigator.mediaDevices.getUserMedia({ video: false, audio: true })
         .then((mediaStream) => {
-            socketRef.current = io.connect("http://192.168.1.241:5001",{
+            socketRef.current = io.connect(`${base.URL}`,{
                 transports: ["websocket"],
                 reconnection: true,
                 reconnectionDelay: 500,
@@ -80,12 +86,7 @@ function AudioStream() {
             });
 
             socketRef.current.on('user-disconnected', userId => {
-                if (peers[userId]) peers[userId].close()
-                setPeers((prevPeers) => {
-                  const updatedPeers = { ...prevPeers };
-                  delete updatedPeers[userId];
-                  return updatedPeers;
-                });
+                disconnectedPeers(userId);
             })
 
             socketRef.current.emit('join-room', remotePeerId, peerId);
@@ -95,12 +96,7 @@ function AudioStream() {
             })
   
             socketRef.current.on('leave-room', userId => {
-              if (peers[userId]) peers[userId].close()
-              setPeers((prevPeers) => {
-                const updatedPeers = { ...prevPeers };
-                delete updatedPeers[userId];
-                return updatedPeers;
-              });
+              disconnectedPeers(userId);
             });
             setLoading(false);
             setIsButtonDisabled(false);

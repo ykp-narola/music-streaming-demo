@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Peer from 'peerjs';
 import io from 'socket.io-client'; // Make sure you have this installed
 import { FaRegCopy } from "react-icons/fa";
+import { base } from './utils/config';
 
 function App() {
   const socketRef = useRef(null);
@@ -18,7 +19,7 @@ function App() {
   
   useEffect(() => {
     // Initialize socket and peer
-    socketRef.current = io.connect("http://192.168.1.241:5001",{
+    socketRef.current = io.connect(`${base.URL}`,{
       transports: ["websocket"],
       reconnection: true,
       reconnectionDelay: 500,

@@ -9,7 +9,6 @@ import MusicList from './pages/MusicList';
 import AudioStream from './pages/AudioStreaming';
 import Header from './components/Header';
 import ProtectedRoute from './components/ProtectedRoute';
-
 const App = () => (
   <AuthProvider>
     <Router>

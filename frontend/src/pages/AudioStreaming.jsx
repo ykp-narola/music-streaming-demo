@@ -8,4 +8,4 @@ function AudioStreaming() {
   )
 }
 
-export default AudioStream
+export default AudioStreaming

@@ -4,7 +4,6 @@ import MusicList from './MusicList';
 
 const Home = () => {
   const [sidebarVisible, setSidebarVisible] = useState(false);
-
   // Dummy author list
   const authors = [
     { id: 1, name: 'Author 1' },

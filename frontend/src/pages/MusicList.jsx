@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from '../services/api';
+import { base } from '../utils/config';
 
 const MusicList = () => {
   const [music, setMusic] = useState([]);
@@ -16,8 +17,7 @@ const MusicList = () => {
 
     fetchMusic();
   }, []);
-
-  const dummyImage = "http://192.168.1.241:5001/uploads/image/dummy_music.jpg"; // Replace with your dummy image URL
+  const dummyImage = `${base.URL}/uploads/image/dummy_music.jpg`; // Replace with your dummy image URL
 
   return (
     <div className="flex">
@@ -34,7 +34,7 @@ const MusicList = () => {
               {/* Background Image */}
               <div 
                 className="absolute inset-0 bg-center bg-cover opacity-30 group-hover:opacity-50 transition-opacity duration-300"
-                style={{ backgroundImage: `url(${item.imageUrl ? `http://192.168.1.241:5001/${item.imageUrl}` : dummyImage})` }}
+                style={{ backgroundImage: `url(${item.imageUrl ? `${base.URL}/${item.imageUrl}` : dummyImage})` }}
               ></div>
 
               {/* Content */}
@@ -43,7 +43,7 @@ const MusicList = () => {
                 <p className="text-gray-600">Artist: {item.artist}</p>
 
                 <audio controls className="mt-4 w-full rounded-lg bg-gray-50 border border-gray-300">
-                  <source src={`http://192.168.1.241:5001/${item.filePath}`} type="audio/mpeg" />
+                  <source src={`${base.URL}/${item.filePath}`} type="audio/mpeg" />
                   Your browser does not support the audio element.
                 </audio>
               </div>
