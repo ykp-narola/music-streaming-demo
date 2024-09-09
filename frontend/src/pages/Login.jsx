@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import axios from '../services/api';
 import { useNavigate } from 'react-router-dom'; // Import useNavigate
 import { useAuth } from '../contexts/AuthContext';
+import { useDispatch } from 'react-redux';
+import { login as loginSlice } from '../store/authSlice';
 
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -9,12 +11,14 @@ const Login = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const { login } = useAuth();
+  const dispatch = useDispatch()
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       const response = await axios.post('/auth/login', { username, password });
       login(response.data.token);
+      dispatch(loginSlice(response.data.user));
       alert('Login successful');
       navigate('/');
     } catch (error) {

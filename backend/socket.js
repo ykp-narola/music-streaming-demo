@@ -12,6 +12,10 @@ module.exports = io => {
                     socket.to(roomId).emit('leave-room', userId)
                 })
             
+                socket.on('mute-status-change', (peerId, isMuted) => {
+                    console.log('mute :>> ',roomId, peerId, isMuted);
+                    socket.to(roomId).emit('mute-status', {peerId, isMuted })
+                })
                 socket.on('disconnect', () => {
                     console.log('join-room >> userId disconnected:>> ', userId);
                     socket.to(roomId).emit('user-disconnected', userId)

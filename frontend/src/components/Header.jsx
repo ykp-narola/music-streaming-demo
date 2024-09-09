@@ -1,10 +1,15 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-
+import { useDispatch } from 'react-redux';
+import { login, logout as logoutSlice } from '../store/authSlice';
 const Header = () => {
   const { isAuthenticated, logout } = useAuth();
-
+  const dispatch = useDispatch();
+  const logoutFeatures = () => {
+    logout();
+    dispatch(logoutSlice())
+  }
   return (
     <header className="p-4 bg-blue-600 text-white shadow-lg">
       <nav className="max-w-7xl mx-auto flex items-center justify-between">
@@ -35,7 +40,7 @@ const Header = () => {
                 Stream
               </Link>
               <button 
-                onClick={logout} 
+                onClick={logoutFeatures} 
                 className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition duration-300"
               >
                 Logout

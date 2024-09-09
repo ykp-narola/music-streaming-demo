@@ -2,7 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Peer from 'peerjs';
 import io from 'socket.io-client'; // Make sure you have this installed
 import { FaRegCopy } from "react-icons/fa";
+import { FiMicOff, FiMic } from "react-icons/fi";
 import { base } from '../utils/config';
+import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 
 function AudioStream() {
     const socketRef = useRef(null);
@@ -16,29 +19,39 @@ function AudioStream() {
     const remoteAudioRefs = useRef({});
     const [loading, setLoading] = useState(false);
     const [isButtonDisabled, setIsButtonDisabled] = useState(false);
-    
+    let userData = useSelector(state => state.auth.userData)
+    const [speakerVolume, setSpeakerVolume] = useState({});  // Track speaker volume
+    const [usersMute, setUsersMute] = useState({});  // bulk of users muted
+    const [mute, setMute] = useState(false);  // Track speaker volume
+    const userStream = useRef(null);  // Store the user's media stream
+    const navigate = useNavigate();
     useEffect(() => {
       // Initialize socket and peer
-      const peer = new Peer();
+      let peerUserId = userData.username.split("@")[0];
+      setPeerId(peerUserId);
+      const peer = new Peer(peerUserId || undefined);
       peer.on('open', (id) => {
         console.log('id :>> ', id);
         setPeerId(id);
       });
       peerInstance.current = peer;
       return () => peerInstance.current?.destroy();
-    }, []);
+    }, [userData]);
   
-    console.log('peers :>> ', peers);
+  
     useEffect(()=>{
         peerInstance.current.on('call', (call) => {
             navigator.mediaDevices.getUserMedia({ video: false, audio: true })
             .then((mediaStream) => {
             // response to calling peer
+            userStream.current = mediaStream;
+            userStream.current.getAudioTracks()[0].enabled = !mute;
             call.answer(mediaStream);
             const video = document.createElement('video')
     
             // and set video tag existing system
             call.on('stream', userVideoStream => {
+                monitorAudio(userVideoStream, call.peer)
                 addVideoStream(video, userVideoStream)
             })
             // set in existing peer instance
@@ -46,14 +59,35 @@ function AudioStream() {
             })
             .catch((err) => console.error('Error getting user media:', err));
         });
-    }, [peers])
+    }, [])
   
+    const monitorAudio = (audioStream, peerId) => {
+      const audioContext = new AudioContext();
+      const analyser = audioContext.createAnalyser();
+      const source = audioContext.createMediaStreamSource(audioStream);
+      source.connect(analyser);
+      analyser.fftSize = 512;
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+      const checkVolume = () => {
+          analyser.getByteFrequencyData(dataArray);
+          const volume = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+          setSpeakerVolume(prev => ({
+            ...prev,
+            [peerId]: volume  // Track volume for this peerId
+        }));
+        requestAnimationFrame(checkVolume);
+      };
+      checkVolume();
+    };
+    
     function connectToNewUser (userId, stream) {
       // call remote peer instance    //call will listern to .on(call) method
       const call = peerInstance.current.call(userId, stream)
       const video = document.createElement('video')
       // get stream from remote and add video to existing peer instance
       call.on('stream', userVideoStream => {
+        monitorAudio(userVideoStream, userId); // Monitor audio
         addVideoStream(video, userVideoStream)
       })
       call.on('close', () => {
@@ -72,10 +106,15 @@ function AudioStream() {
         });
     }
     const call = useCallback((remotePeerId) => {
-      setLoading(true);  
+      setLoading(true); 
+      if(!peerInstance.current._open && window.confirm('Your session is already active in another account.')) {
+        return navigate("/")
+      }
       setTimeout(() => {
         navigator.mediaDevices.getUserMedia({ video: false, audio: true })
         .then((mediaStream) => {
+            userStream.current = mediaStream;
+            userStream.current.getAudioTracks()[0].enabled = !mute;
             socketRef.current = io.connect(`${base.URL}`,{
                 transports: ["websocket"],
                 reconnection: true,
@@ -84,7 +123,6 @@ function AudioStream() {
                 reconnectionAttempts: 1000,
                 forceNew: true,
             });
-
             socketRef.current.on('user-disconnected', userId => {
                 disconnectedPeers(userId);
             })
@@ -93,6 +131,13 @@ function AudioStream() {
             
             socketRef.current.on('user-connected', userId => {
               connectToNewUser(userId, mediaStream)
+            })
+
+            socketRef.current.on('mute-status', ({peerId, isMuted}) => {
+              setUsersMute((prev)=> ({
+                ...prev,
+                [peerId]: isMuted
+              })) 
             })
   
             socketRef.current.on('leave-room', userId => {
@@ -104,7 +149,7 @@ function AudioStream() {
           })
           .catch((err) => console.error('Error starting call:', err));
       }, 1000);
-    }, [peerId, setLoading, connectToNewUser]);
+    }, [peerId, setLoading, connectToNewUser, usersMute]);
   
     const handleConnectClick = useCallback(() => {
       setIsButtonDisabled(true);
@@ -145,6 +190,22 @@ function AudioStream() {
       videoGridRef.current.append(video)
     }
   
+    const toggleMute = useCallback(() => {
+      setMute(prev => {
+        const newMuteState = !prev;
+        if (userStream.current) {
+          userStream.current.getAudioTracks()[0].enabled = !newMuteState;
+        }
+        if (socketRef.current) {
+          socketRef.current.emit('mute-status-change', peerId, newMuteState);
+        }
+        setUsersMute(prev => ({
+          ...prev,
+          [peerId]: newMuteState
+        }))
+        return newMuteState;
+      });
+    }, [peerId]);
     // console.log('flag :>> ', flag);
     return (
       <div className="min-h-screen bg-gray-100 p-8">
@@ -183,12 +244,21 @@ function AudioStream() {
             />
   
             {joined ? (
-              <button 
-                onClick={() => leaveChannel(remotePeerIdValue)} 
-                className="ml-2 bg-gray-500 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-opacity-50"
+              <div className='flex'>
+                <button 
+                  onClick={() => leaveChannel(remotePeerIdValue)} 
+                  className="ml-2 bg-gray-500 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-opacity-50"
+                >
+                  {loading ? `Leaving` : `Leave`} 
+                </button>
+                <button 
+                onClick={toggleMute} 
+                className="ml-2 bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-opacity-50"
               >
-                {loading ? `Leaving` : `Leave`} 
+              {mute ? <FiMicOff className='text-white' /> : <FiMic className='text-white' />}
               </button>
+              </div>
+              
             ) : (
               <button 
                 onClick={handleConnectClick} 
@@ -201,21 +271,34 @@ function AudioStream() {
           </div>
   
           <div className="space-y-4 mt-6">
-            {Object.keys(peers).map((userId, index) =>{
-              return  (
-              <div key={userId} className="p-4 bg-blue-50 rounded-lg shadow-md">
-                <p className="font-semibold text-blue-700">User ID: {userId}</p>
-              </div>
-            )})}
+            {Object.keys(peers).map((userId, index) => {
+              const volume = speakerVolume[userId] || 0;
+              const scale = Math.min(1 + (volume / 150), 2);  // Adjust scale based on volume
+              const isMuted = usersMute[userId] || false
+              // console.log('isMuted :>> ',userId,  isMuted); 
+              return (
+                <div key={userId} className="p-4 bg-blue-50 rounded-lg shadow-md flex justify-between items-center">
+                  <p className="font-semibold text-blue-700">User ID: {userId}</p>
+                  { volume >= 1  && <div
+                    className={`w-6 h-6 rounded-full bg-green-500 transition-transform duration-300 ease-in-out`}
+                    style={{
+                      transform: `scale(${scale})`,
+                      boxShadow: `0 0 ${scale * 10}px rgba(34, 197, 94, 0.6)`
+                    }}
+                  />}
+                  {isMuted ? <FiMicOff /> : null}
+                  </div>
+              );
+            })}
           </div>
   
           {Object.keys(peers).length === 0 && !joined && (
             <p className="text-center text-gray-500 mt-8">Waiting for other users to join...</p>
           )}
   
-          {Object.keys(remoteAudioRefs.current).map(peerId => (
+          {/* {Object.keys(remoteAudioRefs.current).map(peerId => (
             <audio key={peerId} ref={el => remoteAudioRefs.current[peerId] = el} />
-          ))}
+          ))} */}
           <div id="video-grid" ref={videoGridRef} className='hidden' ></div>
         </div>
       </div>
