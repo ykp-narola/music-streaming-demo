@@ -291,8 +291,7 @@ function AudioStream() {
               );
             })}
           </div>
-  
-          {Object.keys(peers).length === 0 && !joined && (
+          {Object.keys(peers).length === 0 && joined && (
             <p className="text-center text-gray-500 mt-8">Waiting for other users to join...</p>
           )}
   
