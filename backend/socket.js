@@ -1,10 +1,19 @@
+const Meeting = require('./models/Meeting');
 module.exports = io => {
     io.on('connection', socket => {
         console.log('New User connected :>> ', socket.id);
-            socket.on('join-room', (roomId, userId) => {
-                console.log('Joining :>> ', roomId, userId);
+            socket.on('join-room', async (roomId, userId, mode) => {
+                console.log('Joining :>> ', roomId, userId, mode);
+                // let meeting = new Meeting({ room: roomId, mode})
+                // meeting.save()
+                let meeting = await Meeting.findOne({room: roomId})
+                if(!meeting) meeting = await Meeting.create({room: roomId, mode, createdBy: userId})
                 socket.join(roomId)
-                socket.to(roomId).emit('user-connected', userId)
+                socket.to(roomId).emit('user-connected', {
+                    userId, 
+                    mode: meeting.mode, 
+                    createdBy: meeting.createdBy
+                })
             
                 socket.on('leave-room', (roomId) => {
                     console.log('leaving :>> ', roomId, userId);

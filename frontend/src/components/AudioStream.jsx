@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Peer from 'peerjs';
 import io from 'socket.io-client'; // Make sure you have this installed
-import { FaRegCopy } from "react-icons/fa";
+import { FaRegCopy, FaBroadcastTower } from "react-icons/fa";
 import { FiMicOff, FiMic } from "react-icons/fi";
 import { base } from '../utils/config';
 import { useSelector } from 'react-redux';
@@ -15,14 +15,14 @@ function AudioStream() {
     const [remotePeerIdValue, setRemotePeerIdValue] = useState('ROOM_ID');
     const [peers, setPeers] = useState({});
     const [joined, setJoined] = useState(false);
-    const [mode, setMode] = useState('meeting');
-    const remoteAudioRefs = useRef({});
+    const [mode, setMode] = useState('');
     const [loading, setLoading] = useState(false);
     const [isButtonDisabled, setIsButtonDisabled] = useState(false);
     let userData = useSelector(state => state.auth.userData)
     const [speakerVolume, setSpeakerVolume] = useState({});  // Track speaker volume
     const [usersMute, setUsersMute] = useState({});  // bulk of users muted
-    const [mute, setMute] = useState(false);  // Track speaker volume
+    const [mute, setMute] = useState(false);  // Track speaker mute
+    const [broadcastUser, setBroadcastUser] = useState("");  // Track speaker volume
     const userStream = useRef(null);  // Store the user's media stream
     const navigate = useNavigate();
     useEffect(() => {
@@ -46,6 +46,10 @@ function AudioStream() {
             // response to calling peer
             userStream.current = mediaStream;
             userStream.current.getAudioTracks()[0].enabled = !mute;
+            // answer those stream
+            console.log('listerner  :>> ', call.peer);
+
+            // if login user is broadcasting 
             call.answer(mediaStream);
             const video = document.createElement('video')
     
@@ -81,14 +85,32 @@ function AudioStream() {
       checkVolume();
     };
     
-    function connectToNewUser (userId, stream) {
+    function connectToNewUser (userId, stream, mode = "meeting", createdBy) {
       // call remote peer instance    //call will listern to .on(call) method
       const call = peerInstance.current.call(userId, stream)
       const video = document.createElement('video')
       // get stream from remote and add video to existing peer instance
+      console.log('connectToNewUser :>> ', call.peer);
+      if(mode == "broadcast"){
+        setBroadcastUser(createdBy);
+        setMode("broadcast");
+      }else{
+        setBroadcastUser("");
+        setMode("meeting");
+      }
       call.on('stream', userVideoStream => {
-        monitorAudio(userVideoStream, userId); // Monitor audio
-        addVideoStream(video, userVideoStream)
+        if(call.peer === createdBy && mode === "broadcast"){
+          monitorAudio(userVideoStream, userId); // Monitor audio
+          if(call.peer != peerId)addVideoStream(video, userVideoStream)
+          }
+        if(mode === "meeting"){
+          monitorAudio(userVideoStream, userId); // Monitor audio
+          console.log('call.peer :>> ', call.peer); 
+          console.log('peerId :>> ', peerId);  
+          console.log('call.peer != peerId :>> ', call.peer != peerId);  
+          if(call.peer != peerId)addVideoStream(video, userVideoStream)
+          // addVideoStream(video, userVideoStream)
+        }
       })
       call.on('close', () => {
         video.remove()
@@ -96,7 +118,6 @@ function AudioStream() {
       setPeers((prevPeers) => ({ ...prevPeers, [userId]: call }));
   
     }
-  
     const disconnectedPeers = (userId) => {
         if (peers[userId]) peers[userId].close()
         setPeers((prevPeers) => {
@@ -127,10 +148,10 @@ function AudioStream() {
                 disconnectedPeers(userId);
             })
 
-            socketRef.current.emit('join-room', remotePeerId, peerId);
+            socketRef.current.emit('join-room', remotePeerId, peerId, mode);
             
-            socketRef.current.on('user-connected', userId => {
-              connectToNewUser(userId, mediaStream)
+            socketRef.current.on('user-connected', ({userId, mode, createdBy}) => {
+              connectToNewUser(userId, mediaStream, mode, createdBy)
             })
 
             socketRef.current.on('mute-status', ({peerId, isMuted}) => {
@@ -169,7 +190,6 @@ function AudioStream() {
           });
         }
         socketRef.current.emit("leave-room",remotePeerIdValue)
-        // document.getElementById('video-grid').innerHTML = ''
         videoGridRef.current.innerHTML =''
         setLoading(false);
         setJoined(false);
@@ -223,15 +243,16 @@ function AudioStream() {
             >
               <FaRegCopy className="h-5 w-5" />
             </button>
-  
-            <select 
-              value={mode} 
-              onChange={(e) => setMode(e.target.value)} 
-              className="bg-white border border-gray-300 rounded-md p-2 ml-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-            >
-              <option value="meeting">Meeting</option>
-              <option value="broadcast">Broadcast</option>
-            </select>
+            { !joined &&
+              <select 
+                value={mode} 
+                onChange={(e) => setMode(e.target.value)} 
+                className="bg-white border border-gray-300 rounded-md p-2 ml-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+              >
+                <option value="meeting">Meeting</option>
+                <option value="broadcast">Broadcast</option>
+              </select>
+            }
           </div>
   
           <div className='flex justify-center'>
@@ -278,16 +299,21 @@ function AudioStream() {
               // console.log('isMuted :>> ',userId,  isMuted); 
               return (
                 <div key={userId} className="p-4 bg-blue-50 rounded-lg shadow-md flex justify-between items-center">
-                  <p className="font-semibold text-blue-700">User ID: {userId}</p>
-                  { volume >= 1  && <div
-                    className={`w-6 h-6 rounded-full bg-green-500 transition-transform duration-300 ease-in-out`}
-                    style={{
-                      transform: `scale(${scale})`,
-                      boxShadow: `0 0 ${scale * 10}px rgba(34, 197, 94, 0.6)`
-                    }}
-                  />}
-                  {isMuted ? <FiMicOff /> : null}
+                  <div>
+                    <p className="font-semibold text-blue-700">User ID: {userId}</p>
                   </div>
+                  <div className='flex items-center'>
+                    { volume >= 1  && <div
+                      className={`w-6 h-6 mr-2 rounded-full bg-green-500 transition-transform duration-300 ease-in-out`}
+                      style={{
+                        transform: `scale(${scale})`,
+                        boxShadow: `0 0 ${scale * 10}px rgba(34, 197, 94, 0.6)`
+                      }}
+                    />}
+                    {isMuted ? <FiMicOff className='mr-2'/> : null}
+                    {userId == broadcastUser ? <FaBroadcastTower className='mr-2'/> : null}
+                  </div>
+                </div>
               );
             })}
           </div>
