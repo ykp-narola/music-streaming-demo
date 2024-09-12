@@ -41,11 +41,11 @@ const App = () => (
           }
         />
         <Route
-          path="/audio-stream"
+          path="/audio-stream/:stream?"
           element={
-            <ProtectedRoute>
+            // <ProtectedRoute>
               <AudioStream />
-            </ProtectedRoute>
+            // </ProtectedRoute>
           }
         />
       </Routes>

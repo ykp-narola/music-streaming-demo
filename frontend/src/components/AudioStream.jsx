@@ -7,12 +7,13 @@ import { base } from '../utils/config';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 
-function AudioStream() {
+function AudioStream({ stream="", ...props}) {
     const socketRef = useRef(null);
     const peerInstance = useRef(null);
     const videoGridRef = useRef(null);
     const [peerId, setPeerId] = useState('');
-    const [remotePeerIdValue, setRemotePeerIdValue] = useState('ROOM_ID');
+    const getFromURL = stream ? true : false;
+    const [remotePeerIdValue, setRemotePeerIdValue] = useState(stream || 'ROOM_ID');
     const [peers, setPeers] = useState({});
     const [joined, setJoined] = useState(false);
     const [mode, setMode] = useState('');
@@ -27,7 +28,7 @@ function AudioStream() {
     const navigate = useNavigate();
     useEffect(() => {
       // Initialize socket and peer
-      let peerUserId = userData.username.split("@")[0];
+      let peerUserId = userData?.username?.split("@")[0];
       setPeerId(peerUserId);
       const peer = new Peer(peerUserId || undefined);
       peer.on('open', (id) => {
@@ -262,6 +263,7 @@ function AudioStream() {
               onChange={e => setRemotePeerIdValue(e.target.value)} 
               className="bg-cyan-100 border border-gray-300 rounded-md p-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
               required
+              disabled = {getFromURL}
             />
   
             {joined ? (

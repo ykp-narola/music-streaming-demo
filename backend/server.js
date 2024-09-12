@@ -41,6 +41,7 @@ app.get('/https', (req, res) => {
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/music', require('./routes/musicRoutes'));
+app.use('/api/meeting', require('./routes/meetingRoutes'));
 
 require("./socket")(io)
 

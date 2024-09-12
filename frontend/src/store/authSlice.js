@@ -21,12 +21,16 @@ const authSlice = createSlice({
         logout: (state) => {
             state.status = false;
             state.userData = null;
+        },
+        setUserData: (state, action) => {
+            state.status = false;
+            state.userData = action.payload;
         }
     }
 })
 
 // Extract actions and reducer from auth slice
-export const { login, logout } = authSlice.actions;
+export const { login, logout, setUserData } = authSlice.actions;
 const authReducer = authSlice.reducer;
 
 // Configuration for redux-persist

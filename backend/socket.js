@@ -2,12 +2,12 @@ const Meeting = require('./models/Meeting');
 module.exports = io => {
     io.on('connection', socket => {
         console.log('New User connected :>> ', socket.id);
-            socket.on('join-room', async (roomId, userId, mode) => {
+            socket.on('join-room', async (roomId, userId, mode= "meeting") => {
                 console.log('Joining :>> ', roomId, userId, mode);
                 // let meeting = new Meeting({ room: roomId, mode})
                 // meeting.save()
                 let meeting = await Meeting.findOne({room: roomId})
-                if(!meeting) meeting = await Meeting.create({room: roomId, mode, createdBy: userId})
+                if(!meeting) meeting = await Meeting.create({room: roomId, mode: mode || "meeting", createdBy: userId})
                 socket.join(roomId)
                 socket.to(roomId).emit('user-connected', {
                     userId, 
