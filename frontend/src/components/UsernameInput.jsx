@@ -10,7 +10,6 @@ function UsernameInput() {
         e.preventDefault();
         if (usernameInput.trim()) {
             const user = { username: usernameInput };  // Mock user data
-            console.log('user :>> ', user); 
             dispatch(setUserData(user));  // Dispatch the user data to Redux
         }
     };
