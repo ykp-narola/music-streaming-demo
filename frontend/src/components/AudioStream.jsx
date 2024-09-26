@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from '../services/api';
 import UserList from './UserList';
 import InputStream from './InputStream';
+import AudioPlayerSection from './AudioPlayerSection';
 
 function AudioStream({ stream=""}) {
     const socketRef = useRef(null);
@@ -34,7 +35,8 @@ function AudioStream({ stream=""}) {
     const [isPlaying, setIsPlaying] = useState(true);
     const [currentTime, setCurrentTime] = useState(0); // Track the current audio time
     const [duration, setDuration] = useState(0);  
-    const demoSoundUrl = "http://192.168.1.241:5001/uploads/music/1725015358640.mp3"; 
+    // const demoSoundUrl = "http://192.168.1.241:5001/uploads/music/1725015358640.mp3"; 
+    const demoSoundUrl = "http://192.168.1.241:5001/uploads/music/mc-baba.mp3"; 
     const [volume, setVolume] = useState(1); // Default volume is 100%
 
     useEffect(() => {
@@ -108,8 +110,8 @@ function AudioStream({ stream=""}) {
           }, 1000);
     
           return () => {
-            audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-            audio.removeEventListener('timeupdate', handleTimeUpdate);
+            audio?.removeEventListener('loadedmetadata', handleLoadedMetadata);
+            audio?.removeEventListener('timeupdate', handleTimeUpdate);
             clearInterval(intervalId);
           };
         }
@@ -122,7 +124,7 @@ function AudioStream({ stream=""}) {
       };
       audioRef.current.addEventListener('timeupdate', handleTimeUpdate);
       return () => {
-        audioRef.current.removeEventListener('timeupdate', handleTimeUpdate);
+        audioRef.current?.removeEventListener('timeupdate', handleTimeUpdate);
       };
     }
   }, []);
@@ -141,7 +143,7 @@ function AudioStream({ stream=""}) {
   
       // Cleanup on unmount
       return () => {
-        audioElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        audioElement?.removeEventListener('loadedmetadata', handleLoadedMetadata);
       };
     }
   }, [audioRef.current]);
@@ -502,56 +504,21 @@ function AudioStream({ stream=""}) {
             />
           </div>
 
-          {/* Audio Player Section */}
-          {peerId === broadcastUser && (
-                <div className="w-full p-4 bg-gray-100 rounded-lg shadow-md mt-6">
-                <h3 className="text-lg font-semibold text-gray-700 mb-2">Music Stream</h3>
-
-                {/* Audio player controls for local user */}
-                <div className="flex items-center">
-                    <button 
-                    className="bg-cyan-500 text-white px-4 py-2 rounded-lg hover:bg-cyan-600 focus:outline-none"
-                    onClick={togglePlayPause}
-                    >
-                    {isPlaying ? 'Pause' : 'Play'}
-                    </button>
-
-                    {/* Seek bar to drag and adjust the current time */}
-                    <input 
-                        type="range" 
-                        min="0" 
-                        max={duration || 100} 
-                        value={currentTime}
-                        onChange={handleSeek}
-                        className="ml-4 w-full"
-                    />
-                    <span className="ml-2 text-gray-600">{Math.floor(currentTime)} sec</span>
-                </div>
-                <div className="mt-4">
-                    <label className="mr-2">Volume:</label>
-                    <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={volume}
-                    onChange={handleVolumeChange}
-                    className="w-full"
-                    />
-                </div>
-                {/* Audio element for local playback */}
-                <audio 
-                    ref={audioRef} 
-                    src={demoSoundUrl}
-                    controls 
-                    loop 
-                    className="w-full mt-2 hidden"
-                >
-                    Your browser does not support the audio element.
-                </audio>
-                </div>
-            )}
-            <div id="video-grid" ref={videoGridRef} className='hidden' ></div>
+            {/* Audio Player Section */}
+            <AudioPlayerSection
+                peerId={peerId}
+                broadcastUser={broadcastUser}
+                togglePlayPause={togglePlayPause}
+                isPlaying={isPlaying}
+                duration={duration}
+                currentTime={currentTime}
+                handleSeek={handleSeek}
+                volume={volume}
+                handleVolumeChange={handleVolumeChange}
+                audioRef={audioRef}
+                soundUrl={demoSoundUrl}
+            />            
+                <div id="video-grid" ref={videoGridRef} className='hidden' ></div>
         </div>
       </div>
     );
