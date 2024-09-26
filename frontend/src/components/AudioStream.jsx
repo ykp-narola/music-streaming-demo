@@ -8,7 +8,7 @@ import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import axios from '../services/api';
 
-function AudioStream({ stream="", ...props}) {
+function AudioStream({ stream=""}) {
     const socketRef = useRef(null);
     const peerInstance = useRef(null);
     const videoGridRef = useRef(null);
@@ -27,6 +27,10 @@ function AudioStream({ stream="", ...props}) {
     const [broadcastUser, setBroadcastUser] = useState("");  // Track speaker volume
     const userStream = useRef(null);  // Store the user's media stream
     const navigate = useNavigate();
+    const audioContextRef = useRef(null);
+    const destinationRef = useRef(null);
+    const demoSoundUrl = "http://192.168.1.241:5001/uploads/music/1725015358640.mp3"; 
+
     useEffect(() => {
       // Initialize socket and peer
       let peerUserId = userData?.username?.split("@")[0];
@@ -39,7 +43,7 @@ function AudioStream({ stream="", ...props}) {
       peerInstance.current = peer;
       return () => peerInstance.current?.destroy();
     }, [userData]);
-  
+
     useEffect(()=>{
       (async()=>{
         let response = await axios.post("/meeting",{
@@ -58,59 +62,57 @@ function AudioStream({ stream="", ...props}) {
       })()
     }, [remotePeerIdValue])
   
-    useEffect(() => {
-      // Handler for incoming peer calls
-      const handleIncomingCall = async (call) => {
-        try {    
-          // Make API call to get broadcast info
-          const response = await axios.post("/meeting", {
-            query: {
-              room: remotePeerIdValue,
-              mode: "broadcast",
-            }
-          });
-    
-          if (response.data.data) {
-            setBroadcastUser(response.data.data.createdBy);
-            setMode("broadcast");
-          } else {
-            setBroadcastUser("");
-            setMode("meeting");
+    // Handler for incoming peer calls
+    const handleIncomingCall = async (call) => {
+      try {    
+        // Make API call to get broadcast info
+        const response = await axios.post("/meeting", {
+          query: {
+            room: remotePeerIdValue,
+            mode: "broadcast",
           }
-          // Get media stream
-          const mediaStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-          userStream.current = mediaStream;
-          userStream.current.getAudioTracks()[0].enabled = !mute;
-    
-          // Create video element
-          const video = document.createElement('video');
-    
-          call.answer(mediaStream);
-
-          // Handle incoming stream
-          call.on('stream', (userVideoStream) => {
-            console.log("----------------------------Listener------------------------------------")
-            if(peerId == broadcastUser) return
-            else if(call.peer == broadcastUser && mode === "broadcast"){
-              monitorAudio(userVideoStream, call.peer); // Monitor audio
-              addVideoStream(video, userVideoStream)
-            }
-            else if(mode === "meeting"){
-              // Answer the call
-              monitorAudio(userVideoStream, call.peer); // Monitor audio
-              addVideoStream(video, userVideoStream)
-            }
-            // monitorAudio(userVideoStream, call.peer);
-            // addVideoStream(video, userVideoStream);
-          });
-    
-          // Update peers state
-          setPeers((prevPeers) => ({ ...prevPeers, [call.peer]: call }));
-        } catch (error) {
-          console.error('Error handling incoming call:', error);
+        });
+  
+        if (response.data.data) {
+          setBroadcastUser(response.data.data.createdBy);
+          setMode("broadcast");
+        } else {
+          setBroadcastUser("");
+          setMode("meeting");
         }
-      };
-    
+        // Get media stream
+        const mediaStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+        userStream.current = mediaStream;
+        userStream.current.getAudioTracks()[0].enabled = !mute;
+
+        // Create video element
+        const video = document.createElement('video');
+  
+        call.answer(mediaStream);
+
+        // Handle incoming stream
+        call.on('stream', (userVideoStream) => {
+          console.log("----------------------------Listener------------------------------------")
+          if(peerId == broadcastUser) return
+          else if(call.peer == broadcastUser && mode === "broadcast"){
+            monitorAudio(userVideoStream, call.peer); // Monitor audio
+            addVideoStream(video, userVideoStream)
+          }
+          else if(mode === "meeting"){
+            // Answer the call
+            monitorAudio(userVideoStream, call.peer); // Monitor audio
+            addVideoStream(video, userVideoStream)
+          }
+        });
+  
+        // Update peers state
+        setPeers((prevPeers) => ({ ...prevPeers, [call.peer]: call }));
+      } catch (error) {
+        console.error('Error handling incoming call:', error);
+      }
+    };
+
+    useEffect(() => {
       // Attach the handler to the peer instance
       peerInstance.current.on('call', handleIncomingCall);
     
@@ -118,8 +120,8 @@ function AudioStream({ stream="", ...props}) {
       return () => {
         peerInstance.current.off('call', handleIncomingCall);
       };
-    }, [remotePeerIdValue, mode, broadcastUser, mute]); // Add dependencies as needed
-    
+    }, [remotePeerIdValue, mode, broadcastUser, mute, handleIncomingCall]); // Add dependencies as needed
+  
   
     const monitorAudio = (audioStream, peerId) => {
       const audioContext = new AudioContext();
@@ -165,15 +167,6 @@ function AudioStream({ stream="", ...props}) {
           monitorAudio(userVideoStream, userId); // Monitor audio
           addVideoStream(video, userVideoStream)
         }
-        // if(call.peer === createdBy && mode === "broadcast"){
-        //   monitorAudio(userVideoStream, userId); // Monitor audio
-        //   if(call.peer != peerId)addVideoStream(video, userVideoStream)
-        //   }
-        // if(mode === "meeting"){
-        //   monitorAudio(userVideoStream, userId); // Monitor audio
-        //   if(call.peer != peerId)addVideoStream(video, userVideoStream)
-        //   // addVideoStream(video, userVideoStream)
-        // }
       })
       call.on('close', () => {
         video.remove()
@@ -200,6 +193,34 @@ function AudioStream({ stream="", ...props}) {
         .then((mediaStream) => {
             userStream.current = mediaStream;
             userStream.current.getAudioTracks()[0].enabled = !mute;
+            
+            let audioContext = new AudioContext();
+            // Create audio sources
+            const micSource = audioContext.createMediaStreamSource(mediaStream);
+
+             // Create an empty destination node to merge streams
+            const destination = audioContext.createMediaStreamDestination();
+
+             // If a music stream exists, merge it
+            if (peerId == "ykp") {
+                console.log("Music Available")
+                const audioElement = new Audio(demoSoundUrl);
+                audioElement.crossOrigin = "anonymous";
+                audioElement.volume = 1.0; // Set volume (adjustable)
+                audioContextRef.current = audioElement;
+                audioElement.play();
+                audioElement.loop = true; // Loop the music
+                audioElement.volume = 0.1; // Set volume (adjustable)
+                audioElement.muted = false; // Set muted
+                let musicSource = audioContext.createMediaElementSource(audioElement);
+                musicSource.connect(destination);
+            }else{
+              console.log("Music not Available")
+            }
+            
+            // Connect microphone stream to the destination
+            micSource.connect(destination);
+
             socketRef.current = io.connect(`${base.URL}`,{
                 transports: ["websocket"],
                 reconnection: true,
@@ -214,9 +235,10 @@ function AudioStream({ stream="", ...props}) {
 
             socketRef.current.emit('join-room', remotePeerId, peerId, mode);
             
+            console.log('destination.stream :>> ', destination.stream); 
             socketRef.current.on('user-connected', ({userId, mode, createdBy}) => {
-              console.log('peers :>> ', peers); 
-              connectToNewUser(userId, mediaStream, mode, createdBy)
+              // connectToNewUser(userId, mediaStream, mode, createdBy)
+              connectToNewUser(userId, destination.stream, mode, createdBy)
             })
 
             socketRef.current.on('mute-status', ({peerId, isMuted}) => {
@@ -292,7 +314,7 @@ function AudioStream({ stream="", ...props}) {
         return newMuteState;
       });
     }, [peerId]);
-    // console.log('flag :>> ', flag);
+
     return (
       <div className="min-h-screen bg-gray-100 p-8">
         <div className="max-w-2xl mx-auto bg-white p-6 rounded-lg shadow-lg">
@@ -331,7 +353,7 @@ function AudioStream({ stream="", ...props}) {
               required
               disabled = {!!getFromURL || joined}
             />
-  
+            
             {joined ? (
               <div className='flex'>
                 <button 
@@ -357,8 +379,8 @@ function AudioStream({ stream="", ...props}) {
                 {loading ? `Connecting` : `Connect`}
               </button>
             )}
+            {/* <button onClick={handleConnectClick}>Start Call with Music</button> */}
           </div>
-  
           <div className="space-y-4 mt-6">
             {Object.keys(peers).map((userId, index) => {
               const volume = speakerVolume[userId] || 0;
@@ -388,10 +410,10 @@ function AudioStream({ stream="", ...props}) {
           {Object.keys(peers).length === 0 && joined && (
             <p className="text-center text-gray-500 mt-8">Waiting for other users to join...</p>
           )}
-  
-          {/* {Object.keys(remoteAudioRefs.current).map(peerId => (
-            <audio key={peerId} ref={el => remoteAudioRefs.current[peerId] = el} />
-          ))} */}
+          {peerId=="ykp" && 
+          <div ref={audioContextRef} style={{ marginTop: '20px' }}>
+          </div>}
+            
           <div id="video-grid" ref={videoGridRef} className='hidden' ></div>
         </div>
       </div>
