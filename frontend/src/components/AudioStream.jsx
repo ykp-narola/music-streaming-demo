@@ -35,8 +35,8 @@ function AudioStream({ stream=""}) {
     const [isPlaying, setIsPlaying] = useState(true);
     const [currentTime, setCurrentTime] = useState(0); // Track the current audio time
     const [duration, setDuration] = useState(0);  
-    // const demoSoundUrl = "http://192.168.1.241:5001/uploads/music/1725015358640.mp3"; 
-    const demoSoundUrl = "http://192.168.1.241:5001/uploads/music/mc-baba.mp3"; 
+    const demoSoundUrl = "http://192.168.1.241:5001/uploads/music/1725015358640.mp3"; 
+    // const demoSoundUrl = "http://192.168.1.241:5001/uploads/music/mc-baba.mp3"; 
     const [volume, setVolume] = useState(1); // Default volume is 100%
 
     useEffect(() => {
