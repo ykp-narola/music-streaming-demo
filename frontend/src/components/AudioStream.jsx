@@ -7,6 +7,8 @@ import { base } from '../utils/config';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import axios from '../services/api';
+import UserList from './UserList';
+import InputStream from './InputStream';
 
 function AudioStream({ stream=""}) {
     const socketRef = useRef(null);
@@ -27,8 +29,11 @@ function AudioStream({ stream=""}) {
     const [broadcastUser, setBroadcastUser] = useState("");  // Track speaker volume
     const userStream = useRef(null);  // Store the user's media stream
     const navigate = useNavigate();
-    const audioContextRef = useRef(null);
-    const destinationRef = useRef(null);
+    // const audioContextRef = useRef(null);
+    const audioRef = useRef(null); 
+    const [isPlaying, setIsPlaying] = useState(true);
+    const [currentTime, setCurrentTime] = useState(0); // Track the current audio time
+    const [duration, setDuration] = useState(0);  
     const demoSoundUrl = "http://192.168.1.241:5001/uploads/music/1725015358640.mp3"; 
 
     useEffect(() => {
@@ -62,6 +67,89 @@ function AudioStream({ stream=""}) {
       })()
     }, [remotePeerIdValue])
   
+     // Update the current time for local playback when dragging the seek bar
+     const handleSeek = (e) => {
+        const seekTime = Number(e.target.value);
+        setCurrentTime(seekTime);
+        if (audioRef.current) {
+          audioRef.current.currentTime = seekTime;
+        }
+      };
+
+    useEffect(() => {
+        const audio = audioRef.current;
+        let intervalId;
+    
+        if (audio) {
+          const handleLoadedMetadata = () => {
+            setDuration(audio.duration);
+          };
+    
+          const handleTimeUpdate = () => {
+            setCurrentTime(audio.currentTime);
+          };
+    
+          audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+          audio.addEventListener('timeupdate', handleTimeUpdate);
+    
+          intervalId = setInterval(() => {
+            if (!audio.paused) {
+              setCurrentTime(audio.currentTime);
+            }
+          }, 1000);
+    
+          return () => {
+            audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+            audio.removeEventListener('timeupdate', handleTimeUpdate);
+            clearInterval(intervalId);
+          };
+        }
+      }, [audioRef.current]);
+  // Update the current time during playback
+  useEffect(() => {
+    if (audioRef.current) {
+      const handleTimeUpdate = () => {
+        setCurrentTime(audioRef.current.currentTime);
+      };
+      audioRef.current.addEventListener('timeupdate', handleTimeUpdate);
+      return () => {
+        audioRef.current.removeEventListener('timeupdate', handleTimeUpdate);
+      };
+    }
+  }, []);
+
+  useEffect(() => {
+    const audioElement = audioRef.current;
+  
+    // Ensure audioRef.current is defined before attaching events
+    if (audioElement) {
+      const handleLoadedMetadata = () => {
+        setDuration(audioElement.duration);  // Set the audio duration dynamically
+      };
+  
+      // Attach the 'loadedmetadata' event
+      audioElement.addEventListener('loadedmetadata', handleLoadedMetadata);
+  
+      // Cleanup on unmount
+      return () => {
+        audioElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      };
+    }
+  }, [audioRef.current]);
+
+
+  // Play/pause the local audio playback
+  const togglePlayPause = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();  // Only pause for local user
+      } else {
+        audioRef.current.play();   // Resume local user playback
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
     // Handler for incoming peer calls
     const handleIncomingCall = async (call) => {
       try {    
@@ -87,8 +175,37 @@ function AudioStream({ stream=""}) {
 
         // Create video element
         const video = document.createElement('video');
-  
-        call.answer(mediaStream);
+
+        let audioContext = new AudioContext();
+        // Create audio sources
+        const micSource = audioContext.createMediaStreamSource(mediaStream);
+
+        // Create an empty destination node to merge streams
+        const destination = audioContext.createMediaStreamDestination();
+        
+         // If a music stream exists, merge it
+         if (peerId == broadcastUser) {
+            console.log("Music Available")
+            const audioElement = new Audio(demoSoundUrl);
+            audioRef.current = audioElement;
+            audioRef.current.crossOrigin = "anonymous";
+            audioRef.current.volume = 1.0; // Set volume (adjustable)
+            // audioContextRef.current = audioRef.current;
+            audioRef.current.play();
+            audioRef.current.loop = true; // Loop the music
+            audioRef.current.volume = 0.1; // Set volume (adjustable)
+            audioRef.current.muted = false; // Set muted
+            audioRef.current.onloadedmetadata = () => {
+                audioRef.current.play(); // Ensure real-time playback
+            };
+            let musicSource = audioContext.createMediaElementSource(audioRef.current);
+            musicSource.connect(destination);
+        }else{
+          console.log("Music not Available")
+        }
+        
+        micSource.connect(destination);
+        call.answer(destination.stream);
 
         // Handle incoming stream
         call.on('stream', (userVideoStream) => {
@@ -174,6 +291,7 @@ function AudioStream({ stream=""}) {
       setPeers((prevPeers) => ({ ...prevPeers, [userId]: call }));
   
     }
+
     const disconnectedPeers = (userId) => {
       console.log('peers :>> ', peers); 
         if (peers[userId]) peers[userId].close()
@@ -183,10 +301,11 @@ function AudioStream({ stream=""}) {
             return updatedPeers;
         });
     }
+    
     const call = useCallback((remotePeerId) => {
       setLoading(true); 
-      if(!peerInstance.current._open && window.confirm('Your session is already active in another account.')) {
-        return navigate("/")
+      if(!peerInstance.current._open && window.confirm('Your session is already active in another account. kindly do hard reload')) {
+        return navigate("/audio-stream")
       }
       setTimeout(() => {
         navigator.mediaDevices.getUserMedia({ video: false, audio: true })
@@ -202,17 +321,21 @@ function AudioStream({ stream=""}) {
             const destination = audioContext.createMediaStreamDestination();
 
              // If a music stream exists, merge it
-            if (peerId == "ykp") {
+            if (peerId == broadcastUser) {
                 console.log("Music Available")
                 const audioElement = new Audio(demoSoundUrl);
-                audioElement.crossOrigin = "anonymous";
-                audioElement.volume = 1.0; // Set volume (adjustable)
-                audioContextRef.current = audioElement;
-                audioElement.play();
-                audioElement.loop = true; // Loop the music
-                audioElement.volume = 0.1; // Set volume (adjustable)
-                audioElement.muted = false; // Set muted
-                let musicSource = audioContext.createMediaElementSource(audioElement);
+                audioRef.current = audioElement;
+                audioRef.current.crossOrigin = "anonymous";
+                audioRef.current.volume = 1.0; // Set volume (adjustable)
+                // audioContextRef.current = audioRef.current;
+                audioRef.current.play();
+                audioRef.current.loop = true; // Loop the music
+                audioRef.current.volume = 0.1; // Set volume (adjustable)
+                audioRef.current.muted = false; // Set muted
+                audioRef.current.onloadedmetadata = () => {
+                    audioRef.current.play(); // Ensure real-time playback
+                };
+                let musicSource = audioContext.createMediaElementSource(audioRef.current);
                 musicSource.connect(destination);
             }else{
               console.log("Music not Available")
@@ -235,7 +358,6 @@ function AudioStream({ stream=""}) {
 
             socketRef.current.emit('join-room', remotePeerId, peerId, mode);
             
-            console.log('destination.stream :>> ', destination.stream); 
             socketRef.current.on('user-connected', ({userId, mode, createdBy}) => {
               // connectToNewUser(userId, mediaStream, mode, createdBy)
               connectToNewUser(userId, destination.stream, mode, createdBy)
@@ -315,6 +437,11 @@ function AudioStream({ stream=""}) {
       });
     }, [peerId]);
 
+    const playAudio = () => {
+        if (audioRef.current) {
+            audioRef.current.play();
+        }
+    };
     return (
       <div className="min-h-screen bg-gray-100 p-8">
         <div className="max-w-2xl mx-auto bg-white p-6 rounded-lg shadow-lg">
@@ -345,76 +472,68 @@ function AudioStream({ stream=""}) {
           </div>
   
           <div className='flex justify-center'>
-            <input 
-              type="text" 
-              value={remotePeerIdValue}
-              onChange={e => setRemotePeerIdValue(e.target.value)} 
-              className="bg-cyan-100 border border-gray-300 rounded-md p-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-              required
-              disabled = {!!getFromURL || joined}
+            <InputStream
+                remotePeerIdValue={remotePeerIdValue}
+                setRemotePeerIdValue={setRemotePeerIdValue}
+                getFromURL={getFromURL}
+                joined={joined}
+                leaveChannel={leaveChannel}
+                loading={loading}
+                toggleMute={toggleMute}
+                mute={mute}
+                handleConnectClick={handleConnectClick}
+                isButtonDisabled={isButtonDisabled}
             />
-            
-            {joined ? (
-              <div className='flex'>
-                <button 
-                  onClick={() => leaveChannel(remotePeerIdValue)} 
-                  className="ml-2 bg-gray-500 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-opacity-50"
-                >
-                  {loading ? `Leaving` : `Leave`} 
-                </button>
-                <button 
-                onClick={toggleMute} 
-                className="ml-2 bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-opacity-50"
-              >
-              {mute ? <FiMicOff className='text-white' /> : <FiMic className='text-white' />}
-              </button>
-              </div>
-              
-            ) : (
-              <button 
-                onClick={handleConnectClick} 
-                className="ml-2 bg-cyan-500 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-cyan-600 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-opacity-50"
-                disabled={isButtonDisabled}
-              >
-                {loading ? `Connecting` : `Connect`}
-              </button>
-            )}
-            {/* <button onClick={handleConnectClick}>Start Call with Music</button> */}
           </div>
           <div className="space-y-4 mt-6">
-            {Object.keys(peers).map((userId, index) => {
-              const volume = speakerVolume[userId] || 0;
-              const scale = Math.min(1 + (volume / 150), 2);  // Adjust scale based on volume
-              const isMuted = usersMute[userId] || false
-              // console.log('isMuted :>> ',userId,  isMuted); 
-              return (
-                <div key={userId} className="p-4 bg-blue-50 rounded-lg shadow-md flex justify-between items-center">
-                  <div>
-                    <p className="font-semibold text-blue-700">User ID: {userId}</p>
-                  </div>
-                  <div className='flex items-center'>
-                    { volume >= 1  && <div
-                      className={`w-6 h-6 mr-2 rounded-full bg-green-500 transition-transform duration-300 ease-in-out`}
-                      style={{
-                        transform: `scale(${scale})`,
-                        boxShadow: `0 0 ${scale * 10}px rgba(34, 197, 94, 0.6)`
-                      }}
-                    />}
-                    {isMuted ? <FiMicOff className='mr-2'/> : null}
-                    {userId == broadcastUser ? <FaBroadcastTower className='mr-2'/> : null}
-                  </div>
-                </div>
-              );
-            })}
+            <UserList
+                peers={peers}
+                speakerVolume={speakerVolume}
+                usersMute={usersMute}
+                broadcastUser={broadcastUser}
+                joined={joined}
+            />
           </div>
-          {Object.keys(peers).length === 0 && joined && (
-            <p className="text-center text-gray-500 mt-8">Waiting for other users to join...</p>
-          )}
-          {peerId=="ykp" && 
-          <div ref={audioContextRef} style={{ marginTop: '20px' }}>
-          </div>}
-            
-          <div id="video-grid" ref={videoGridRef} className='hidden' ></div>
+
+          {/* Audio Player Section */}
+          {peerId === broadcastUser && (
+                <div className="w-full p-4 bg-gray-100 rounded-lg shadow-md mt-6">
+                <h3 className="text-lg font-semibold text-gray-700 mb-2">Music Stream</h3>
+
+                {/* Audio player controls for local user */}
+                <div className="flex items-center">
+                    <button 
+                    className="bg-cyan-500 text-white px-4 py-2 rounded-lg hover:bg-cyan-600 focus:outline-none"
+                    onClick={togglePlayPause}
+                    >
+                    {isPlaying ? 'Pause' : 'Play'}
+                    </button>
+
+                    {/* Seek bar to drag and adjust the current time */}
+                    <input 
+                        type="range" 
+                        min="0" 
+                        max={duration || 100} 
+                        value={currentTime}
+                        onChange={handleSeek}
+                        className="ml-4 w-full"
+                    />
+                    <span className="ml-2 text-gray-600">{Math.floor(currentTime)} sec</span>
+                </div>
+
+                {/* Audio element for local playback */}
+                <audio 
+                    ref={audioRef} 
+                    src={demoSoundUrl}
+                    controls 
+                    loop 
+                    className="w-full mt-2 hidden"
+                >
+                    Your browser does not support the audio element.
+                </audio>
+                </div>
+            )}
+            <div id="video-grid" ref={videoGridRef} className='hidden' ></div>
         </div>
       </div>
     );
