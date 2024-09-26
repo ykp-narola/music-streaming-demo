@@ -35,6 +35,7 @@ function AudioStream({ stream=""}) {
     const [currentTime, setCurrentTime] = useState(0); // Track the current audio time
     const [duration, setDuration] = useState(0);  
     const demoSoundUrl = "http://192.168.1.241:5001/uploads/music/1725015358640.mp3"; 
+    const [volume, setVolume] = useState(1); // Default volume is 100%
 
     useEffect(() => {
       // Initialize socket and peer
@@ -73,6 +74,14 @@ function AudioStream({ stream=""}) {
         setCurrentTime(seekTime);
         if (audioRef.current) {
           audioRef.current.currentTime = seekTime;
+        }
+      };
+
+      const handleVolumeChange = (e) => {
+        const newVolume = Number(e.target.value);
+        setVolume(newVolume);
+        if (audioRef.current) {
+          audioRef.current.volume = newVolume; // Set the audio volume
         }
       };
 
@@ -189,12 +198,11 @@ function AudioStream({ stream=""}) {
             const audioElement = new Audio(demoSoundUrl);
             audioRef.current = audioElement;
             audioRef.current.crossOrigin = "anonymous";
-            audioRef.current.volume = 1.0; // Set volume (adjustable)
+            audioRef.current.volume = volume; // Set volume (adjustable)
             // audioContextRef.current = audioRef.current;
-            audioRef.current.play();
             audioRef.current.loop = true; // Loop the music
-            audioRef.current.volume = 0.1; // Set volume (adjustable)
             audioRef.current.muted = false; // Set muted
+            audioRef.current.play();
             audioRef.current.onloadedmetadata = () => {
                 audioRef.current.play(); // Ensure real-time playback
             };
@@ -326,12 +334,11 @@ function AudioStream({ stream=""}) {
                 const audioElement = new Audio(demoSoundUrl);
                 audioRef.current = audioElement;
                 audioRef.current.crossOrigin = "anonymous";
-                audioRef.current.volume = 1.0; // Set volume (adjustable)
                 // audioContextRef.current = audioRef.current;
-                audioRef.current.play();
                 audioRef.current.loop = true; // Loop the music
-                audioRef.current.volume = 0.1; // Set volume (adjustable)
+                audioRef.current.volume = volume; // Set volume (adjustable)
                 audioRef.current.muted = false; // Set muted
+                audioRef.current.play();
                 audioRef.current.onloadedmetadata = () => {
                     audioRef.current.play(); // Ensure real-time playback
                 };
@@ -520,7 +527,18 @@ function AudioStream({ stream=""}) {
                     />
                     <span className="ml-2 text-gray-600">{Math.floor(currentTime)} sec</span>
                 </div>
-
+                <div className="mt-4">
+                    <label className="mr-2">Volume:</label>
+                    <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={volume}
+                    onChange={handleVolumeChange}
+                    className="w-full"
+                    />
+                </div>
                 {/* Audio element for local playback */}
                 <audio 
                     ref={audioRef} 
