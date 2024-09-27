@@ -52,6 +52,12 @@ app.use('/api/music', require('./routes/musicRoutes'));
 app.use('/api/meeting', require('./routes/meetingRoutes'));
 
 require("./socket")(io)
+app.use((req, res, next) => {
+  next(
+    require("http-errors")["NotFound"](`can't find ${req.url} on this server!`)
+  );
+});
+app.use(require("./middleware/errorHandler"));
 
 server.listen(5001,()=>{
   console.log("Server listening on 5001")
