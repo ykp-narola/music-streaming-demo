@@ -34,8 +34,15 @@ app.use('/uploads', express.static('uploads'));
 app.use('/uploads/music', express.static(path.join(__dirname, 'uploads/music'))); // Serve music files
 app.use('/uploads/image', express.static(path.join(__dirname, 'uploads/image'))); // Serve music files
 app.use(express.static('public'))
-app.get('/https', (req, res) => {
-  res.send('Hello, HTTPS!');
+app.get('/health-check', (req, res) => {
+  res.status(200).json({
+    status: 200,
+    message: "Health Check Successful",
+    data: {
+        date: new Date(),
+        CPUs: require('os').cpus().length
+    }
+});
 });
 
 // Routes
