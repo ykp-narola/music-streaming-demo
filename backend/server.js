@@ -4,6 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const connectDB = require('./config/db');
 const fs = require('fs');
+require("dotenv").config()
 const server = require('http').createServer({}, app)
 
 // Load SSL certificate and key
