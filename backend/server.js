@@ -29,7 +29,7 @@ app.set('view engine', 'ejs')
 app.use(cors()); // Enable CORS
 app.use(express.json()); // Parse JSON bodies
 app.use(require("morgan")(':remote-addr - :remote-user - [:date[clf]] - ":method :url HTTP/:http-version" - :status - :res[content-length] B -  :response-time ms'))
-
+app.use(require("./util/response/responseHandler"));
 // Static file serving
 app.use('/uploads', express.static('uploads'));
 app.use('/uploads/music', express.static(path.join(__dirname, 'uploads/music'))); // Serve music files
