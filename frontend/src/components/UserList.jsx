@@ -5,6 +5,7 @@ import { FiMicOff } from 'react-icons/fi';
 function UserList({peers, speakerVolume, usersMute, broadcastUser, joined}) {
   return (
     <div>
+        {broadcastUser && <p className="text-center text-gray-500 mt-8 mb-3"> Broadcast By {broadcastUser} </p>}
         {Object.keys(peers).map((userId, index) => {
             const volume = speakerVolume[userId] || 0;
             const scale = Math.min(1 + (volume / 150), 2);  // Adjust scale based on volume

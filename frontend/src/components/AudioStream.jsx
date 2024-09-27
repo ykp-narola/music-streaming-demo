@@ -35,9 +35,26 @@ function AudioStream({ stream=""}) {
     const [isPlaying, setIsPlaying] = useState(true);
     const [currentTime, setCurrentTime] = useState(0); // Track the current audio time
     const [duration, setDuration] = useState(0);  
-    const demoSoundUrl = "http://192.168.1.241:5001/uploads/music/1725015358640.mp3"; 
-    // const demoSoundUrl = "http://192.168.1.241:5001/uploads/music/mc-baba.mp3"; 
     const [volume, setVolume] = useState(1); // Default volume is 100%
+    const [musicUrl, setMusicUrl] = useState(''); // To hold the selected URL
+    const [musicList, setMusicList] = useState([]); // To hold the list of music from API
+
+    // Fetch music list from API on component mount
+    useEffect(() => {
+      const fetchMusicList = async () => {
+        try {
+          const response = await axios.get("/music"); 
+          if (response.data) {
+            setMusicList(response.data); 
+            setMusicUrl(`${base.URL}/${response.data[0].filePath}`); 
+          }
+        } catch (error) {
+          console.error("Error fetching music list:", error);
+        }
+      };
+
+      fetchMusicList();
+    }, []);
 
     useEffect(() => {
       // Initialize socket and peer
@@ -69,23 +86,26 @@ function AudioStream({ stream=""}) {
         } 
       })()
     }, [remotePeerIdValue])
-  
-     // Update the current time for local playback when dragging the seek bar
-     const handleSeek = (e) => {
-        const seekTime = Number(e.target.value);
-        setCurrentTime(seekTime);
-        if (audioRef.current) {
-          audioRef.current.currentTime = seekTime;
-        }
-      };
 
-      const handleVolumeChange = (e) => {
-        const newVolume = Number(e.target.value);
-        setVolume(newVolume);
-        if (audioRef.current) {
-          audioRef.current.volume = newVolume; // Set the audio volume
-        }
-      };
+    useEffect(() => {
+      if (audioRef.current && musicUrl) {
+        audioRef.current.src = musicUrl; // Set the audio source to the selected URL
+        audioRef.current.play(); // Play the new sound when selected
+      }
+    }, [musicUrl]);
+  
+    // Update the current time during playback
+    useEffect(() => {
+      if (audioRef.current) {
+        const handleTimeUpdate = () => {
+          setCurrentTime(audioRef.current.currentTime);
+        };
+        audioRef.current.addEventListener('timeupdate', handleTimeUpdate);
+        return () => {
+          audioRef.current?.removeEventListener('timeupdate', handleTimeUpdate);
+        };
+      }
+    }, []);
 
     useEffect(() => {
         const audio = audioRef.current;
@@ -115,54 +135,59 @@ function AudioStream({ stream=""}) {
             clearInterval(intervalId);
           };
         }
-      }, [audioRef.current]);
-  // Update the current time during playback
-  useEffect(() => {
-    if (audioRef.current) {
-      const handleTimeUpdate = () => {
-        setCurrentTime(audioRef.current.currentTime);
-      };
-      audioRef.current.addEventListener('timeupdate', handleTimeUpdate);
+    }, [audioRef.current]);
+
+    useEffect(() => {
+      // Attach the handler to the peer instance
+      peerInstance.current.on('call', handleIncomingCall);
+    
+      // Cleanup on component unmount
       return () => {
-        audioRef.current?.removeEventListener('timeupdate', handleTimeUpdate);
+        peerInstance.current.off('call', handleIncomingCall);
       };
-    }
-  }, []);
-
-  useEffect(() => {
-    const audioElement = audioRef.current;
+    }, [remotePeerIdValue, mode, broadcastUser, mute, handleIncomingCall]); // Add dependencies as needed
   
-    // Ensure audioRef.current is defined before attaching events
-    if (audioElement) {
-      const handleLoadedMetadata = () => {
-        setDuration(audioElement.duration);  // Set the audio duration dynamically
-      };
-  
-      // Attach the 'loadedmetadata' event
-      audioElement.addEventListener('loadedmetadata', handleLoadedMetadata);
-  
-      // Cleanup on unmount
-      return () => {
-        audioElement?.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      };
-    }
-  }, [audioRef.current]);
-
-
-  // Play/pause the local audio playback
-  const togglePlayPause = () => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();  // Only pause for local user
-      } else {
-        audioRef.current.play();   // Resume local user playback
+    // Update the current time for local playback when dragging the seek bar
+    const handleSeek = (e) => {
+      const seekTime = Number(e.target.value);
+      setCurrentTime(seekTime);
+      if (audioRef.current) {
+        audioRef.current.currentTime = seekTime;
       }
-      setIsPlaying(!isPlaying);
-    }
-  };
+    };
+
+    const handleVolumeChange = (e) => {
+      const newVolume = Number(e.target.value);
+      setVolume(newVolume);
+      if (audioRef.current) {
+        audioRef.current.volume = newVolume; // Set the audio volume
+      }
+    };
+
+    // Function to handle demo sound URL changes
+    const handleSoundChange = (e) => {
+      const selectedUrl = e.target.value;
+      setMusicUrl(selectedUrl);
+      if (audioRef.current) {
+        audioRef.current.src = selectedUrl;
+        audioRef.current.play(); // Play the newly selected sound
+      }
+    };
+
+    // Play/pause the local audio playback
+    const togglePlayPause = () => {
+      if (audioRef.current) {
+        if (isPlaying) {
+          audioRef.current.pause();  // Only pause for local user
+        } else {
+          audioRef.current.play();   // Resume local user playback
+        }
+        setIsPlaying(!isPlaying);
+      }
+    };
 
     // Handler for incoming peer calls
-    const handleIncomingCall = async (call) => {
+    async function handleIncomingCall (call) {
       try {    
         // Make API call to get broadcast info
         const response = await axios.post("/meeting", {
@@ -197,7 +222,7 @@ function AudioStream({ stream=""}) {
          // If a music stream exists, merge it
          if (peerId == broadcastUser) {
             console.log("Music Available")
-            const audioElement = new Audio(demoSoundUrl);
+            const audioElement = new Audio(musicUrl);
             audioRef.current = audioElement;
             audioRef.current.crossOrigin = "anonymous";
             audioRef.current.volume = volume; // Set volume (adjustable)
@@ -238,17 +263,6 @@ function AudioStream({ stream=""}) {
         console.error('Error handling incoming call:', error);
       }
     };
-
-    useEffect(() => {
-      // Attach the handler to the peer instance
-      peerInstance.current.on('call', handleIncomingCall);
-    
-      // Cleanup on component unmount
-      return () => {
-        peerInstance.current.off('call', handleIncomingCall);
-      };
-    }, [remotePeerIdValue, mode, broadcastUser, mute, handleIncomingCall]); // Add dependencies as needed
-  
   
     const monitorAudio = (audioStream, peerId) => {
       const audioContext = new AudioContext();
@@ -333,7 +347,7 @@ function AudioStream({ stream=""}) {
              // If a music stream exists, merge it
             if (peerId == broadcastUser) {
                 console.log("Music Available")
-                const audioElement = new Audio(demoSoundUrl);
+                const audioElement = new Audio(musicUrl);
                 audioRef.current = audioElement;
                 audioRef.current.crossOrigin = "anonymous";
                 // audioContextRef.current = audioRef.current;
@@ -446,81 +460,108 @@ function AudioStream({ stream=""}) {
       });
     }, [peerId]);
 
-    const playAudio = () => {
-        if (audioRef.current) {
-            audioRef.current.play();
-        }
-    };
     return (
-      <div className="min-h-screen bg-gray-100 p-8">
-        <div className="max-w-2xl mx-auto bg-white p-6 rounded-lg shadow-lg">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4 text-center">Audio Meeting Room</h2>
-          
-          <div className="flex items-center mb-6 justify-center">
-            <p className="text-gray-600">User ID: 
-              <span className="font-mono bg-gray-200 p-1 rounded ml-2">{peerId}</span>
-            </p>
-            <button 
-              onClick={copyToClipboard} 
-              className="ml-2 text-cyan-500 hover:text-cyan-700 focus:outline-none"
-              title="Copy Room ID"
+      <div className="min-h-screen bg-gray-100 p-4 md:p-8">
+      <div className="max-w-2xl mx-auto bg-white p-4 md:p-6 rounded-lg shadow-lg">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 text-center">
+          Audio Meeting Room
+        </h2>
+    
+        {peerId === broadcastUser && (
+          <div className="flex flex-col md:flex-row justify-center mb-6">
+            <label className="mb-2 md:mb-0 mr-0 md:mr-4">Select Music:</label>
+            <select
+              value={musicUrl}
+              onChange={handleSoundChange}
+              className="bg-white border border-gray-300 rounded-md p-2 text-gray-700 w-full md:w-auto"
             >
-              <FaRegCopy className="h-5 w-5" />
-            </button>
-            { !joined &&
-              <select 
-                disabled={!!getFromURL}
-                value={mode} 
-                onChange={(e) => setMode(e.target.value)} 
-                className="bg-white border border-gray-300 rounded-md p-2 ml-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-              >
-                <option value="meeting">Meeting</option>
-                <option value="broadcast">Broadcast</option>
-              </select>
-            }
+              {musicList.map((music, index) => (
+                <option key={index} value={`${base.URL}/${music.filePath}`}>
+                  {music.title || `Track ${index + 1}`}
+                </option>
+              ))}
+            </select>
           </div>
-  
-          <div className='flex justify-center'>
-            <InputStream
-                remotePeerIdValue={remotePeerIdValue}
-                setRemotePeerIdValue={setRemotePeerIdValue}
-                getFromURL={getFromURL}
-                joined={joined}
-                leaveChannel={leaveChannel}
-                loading={loading}
-                toggleMute={toggleMute}
-                mute={mute}
-                handleConnectClick={handleConnectClick}
-                isButtonDisabled={isButtonDisabled}
-            />
-          </div>
-          <div className="space-y-4 mt-6">
-            <UserList
-                peers={peers}
-                speakerVolume={speakerVolume}
-                usersMute={usersMute}
-                broadcastUser={broadcastUser}
-                joined={joined}
-            />
-          </div>
-
-            {/* Audio Player Section */}
-            <AudioPlayerSection
-                peerId={peerId}
-                broadcastUser={broadcastUser}
-                togglePlayPause={togglePlayPause}
-                isPlaying={isPlaying}
-                duration={duration}
-                currentTime={currentTime}
-                handleSeek={handleSeek}
-                volume={volume}
-                handleVolumeChange={handleVolumeChange}
-                audioRef={audioRef}
-                soundUrl={demoSoundUrl}
-            />            
-                <div id="video-grid" ref={videoGridRef} className='hidden' ></div>
+        )}
+    
+        {/* User ID and Copy Room ID Section */}
+        <div className="flex flex-col md:flex-row items-center mb-6 justify-center space-y-4 md:space-y-0">
+          <p className="text-gray-600">
+            User ID:
+            <span className="font-mono bg-gray-200 p-1 rounded ml-2">{peerId}</span>
+          </p>
+          <button
+            onClick={copyToClipboard}
+            className="ml-2 text-cyan-500 hover:text-cyan-700 focus:outline-none"
+            title="Copy Room ID"
+          >
+            <FaRegCopy className="h-5 w-5" />
+          </button>
+    
+          {!joined && (
+            <select
+              disabled={!!getFromURL}
+              value={mode}
+              onChange={(e) => setMode(e.target.value)}
+              className="bg-white border border-gray-300 rounded-md p-2 mt-4 md:mt-0 ml-0 md:ml-4 text-gray-700 w-full md:w-auto focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+            >
+              <option value="meeting">Meeting</option>
+              <option value="broadcast">Broadcast</option>
+            </select>
+          )}
         </div>
+    
+        {/* Input Stream Section */}
+        <div className="flex justify-center">
+          <InputStream
+            remotePeerIdValue={remotePeerIdValue}
+            setRemotePeerIdValue={setRemotePeerIdValue}
+            getFromURL={getFromURL}
+            joined={joined}
+            leaveChannel={leaveChannel}
+            loading={loading}
+            toggleMute={toggleMute}
+            mute={mute}
+            handleConnectClick={handleConnectClick}
+            isButtonDisabled={isButtonDisabled}
+            broadcastUser={broadcastUser}
+            mode={mode}
+            peerId={peerId}
+          />
+        </div>
+    
+        {/* Audio Player Section */}
+        <AudioPlayerSection
+          peerId={peerId}
+          broadcastUser={broadcastUser}
+          togglePlayPause={togglePlayPause}
+          isPlaying={isPlaying}
+          duration={duration}
+          currentTime={currentTime}
+          handleSeek={handleSeek}
+          volume={volume}
+          handleVolumeChange={handleVolumeChange}
+          audioRef={audioRef}
+          soundUrl={musicUrl}
+        />
+
+        {/* User List Section */}
+        <div className="space-y-4 mt-6">
+          <UserList
+            peers={peers}
+            speakerVolume={speakerVolume}
+            usersMute={usersMute}
+            broadcastUser={broadcastUser}
+            joined={joined}
+          />
+        </div>
+    
+    
+        {/* Hidden Video Grid */}
+        <div id="video-grid" ref={videoGridRef} className="hidden"></div>
       </div>
+    </div>
+      
     );
 }
 
