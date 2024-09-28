@@ -38,7 +38,7 @@ function AudioStream({ stream=""}) {
     const [volume, setVolume] = useState(1); // Default volume is 100%
     const [musicUrl, setMusicUrl] = useState(''); // To hold the selected URL
     const [musicList, setMusicList] = useState([]); // To hold the list of music from API
-
+    let musicSource = useRef(null);
     // Fetch music list from API on component mount
     useEffect(() => {
       const fetchMusicList = async () => {
@@ -189,6 +189,7 @@ function AudioStream({ stream=""}) {
     // Handler for incoming peer calls
     async function handleIncomingCall (call) {
       try {    
+        console.log('handleIncomingCall from :>> ', peerId); 
         // Make API call to get broadcast info
         const response = await axios.post("/meeting", {
           query: {
@@ -212,36 +213,51 @@ function AudioStream({ stream=""}) {
         // Create video element
         const video = document.createElement('video');
 
-        let audioContext = new AudioContext();
+        const audioContext = new AudioContext();
         // Create audio sources
         const micSource = audioContext.createMediaStreamSource(mediaStream);
 
         // Create an empty destination node to merge streams
         const destination = audioContext.createMediaStreamDestination();
         
+        console.log('peerId :>> ', peerId); 
+        console.log('broadcastUser :>> ', broadcastUser); 
          // If a music stream exists, merge it
          if (peerId == broadcastUser) {
             console.log("Music Available")
-            const audioElement = new Audio(musicUrl);
+            const audioElement = audioRef.current || new Audio(musicUrl);
             audioRef.current = audioElement;
             audioRef.current.crossOrigin = "anonymous";
-            audioRef.current.volume = volume; // Set volume (adjustable)
-            // audioContextRef.current = audioRef.current;
             audioRef.current.loop = true; // Loop the music
+            audioRef.current.volume = volume; // Set volume (adjustable)
             audioRef.current.muted = false; // Set muted
             audioRef.current.play();
             audioRef.current.onloadedmetadata = () => {
                 audioRef.current.play(); // Ensure real-time playback
             };
-            let musicSource = audioContext.createMediaElementSource(audioRef.current);
-            musicSource.connect(destination);
+            // Check if the audio element is already connected to an AudioContext
+            console.log('from incoming handling audioRef.currentSource :>> ', audioRef.current); 
+            console.log('audioRef.currentSource :>> ', audioRef.currentSource); 
+            // if (!audioRef.currentSource) {
+              console.log('if --------- 1 --------- :>> ');
+              if(!musicSource.current){
+                console.log('if --------- 2 --------- :>> ');
+                console.log('!musicSource.current :>> ', !musicSource.current);
+                musicSource.current = audioContext.createMediaElementSource(audioRef.current);
+                musicSource.current.connect(destination);
+              }
+              audioRef.currentSource = musicSource.current; // Store reference to the source node
+            // }else{
+            //   console.log('else --------- 1 --------- :>> ');
+            //   // audioRef.currentSource.connect(destination)
+            // }
+            // let musicSource = audioContext.createMediaElementSource(audioRef.current);
+            // musicSource.connect(destination);
         }else{
           console.log("Music not Available")
         }
-        
         micSource.connect(destination);
         call.answer(destination.stream);
-
         // Handle incoming stream
         call.on('stream', (userVideoStream) => {
           console.log("----------------------------Listener------------------------------------")
@@ -254,7 +270,7 @@ function AudioStream({ stream=""}) {
             // Answer the call
             monitorAudio(userVideoStream, call.peer); // Monitor audio
             addVideoStream(video, userVideoStream)
-          }
+          }  
         });
   
         // Update peers state
@@ -308,12 +324,23 @@ function AudioStream({ stream=""}) {
           monitorAudio(userVideoStream, userId); // Monitor audio
           addVideoStream(video, userVideoStream)
         }
+        // if (peerId !== broadcastUser && mode === "broadcast") {
+        //   monitorAudio(userVideoStream, userId);
+        //   addVideoStream(video, userVideoStream);
+        // }
       })
       call.on('close', () => {
         video.remove()
       })
       setPeers((prevPeers) => ({ ...prevPeers, [userId]: call }));
   
+    }
+
+    function cleanupAudioContext() {
+      if (audioRef.current && audioRef.currentSource) {
+        audioRef.currentSource.disconnect(); // Disconnect the previous source
+        audioRef.currentSource = null; // Clear the reference
+      }
     }
 
     const disconnectedPeers = (userId) => {
@@ -336,8 +363,8 @@ function AudioStream({ stream=""}) {
         .then((mediaStream) => {
             userStream.current = mediaStream;
             userStream.current.getAudioTracks()[0].enabled = !mute;
-            
-            let audioContext = new AudioContext();
+            console.log('calling from:>> ', peerId); 
+            const audioContext = new AudioContext();
             // Create audio sources
             const micSource = audioContext.createMediaStreamSource(mediaStream);
 
@@ -347,7 +374,7 @@ function AudioStream({ stream=""}) {
              // If a music stream exists, merge it
             if (peerId == broadcastUser) {
                 console.log("Music Available")
-                const audioElement = new Audio(musicUrl);
+                const audioElement = audioRef.current || new Audio(musicUrl);
                 audioRef.current = audioElement;
                 audioRef.current.crossOrigin = "anonymous";
                 // audioContextRef.current = audioRef.current;
@@ -358,8 +385,29 @@ function AudioStream({ stream=""}) {
                 audioRef.current.onloadedmetadata = () => {
                     audioRef.current.play(); // Ensure real-time playback
                 };
-                let musicSource = audioContext.createMediaElementSource(audioRef.current);
-                musicSource.connect(destination);
+                // if (!audioRef.currentSource) {
+                //   if(!musicSource.current){
+                //     musicSource.current = audioContext.createMediaElementSource(audioRef.current);
+                //     musicSource.current.connect(destination);
+                //   }
+                //   audioRef.currentSource = musicSource.current; // Store reference to the source node
+                // }
+
+                if (!audioRef.currentSource) {
+                  console.log('if ----call----- 1 --------- :>> ');
+                  if(!musicSource.current){
+                    console.log('if -----call---- 2 --------- :>> ');
+                    console.log('!musicSource.current :>> ', !musicSource.current);
+                    musicSource.current = audioContext.createMediaElementSource(audioRef.current);
+                    musicSource.current.connect(destination);
+                  }
+                  audioRef.currentSource = musicSource.current; // Store reference to the source node
+                }else{
+                  console.log('else -----call---- 1 --------- :>> ');
+                  // audioRef.currentSource.connect(destination)
+                }
+                // let musicSource = audioContext.createMediaElementSource(audioRef.current);
+                // musicSource.connect(destination);
             }else{
               console.log("Music not Available")
             }
@@ -424,6 +472,7 @@ function AudioStream({ stream=""}) {
         }
         socketRef.current.emit("leave-room",remotePeerIdValue)
         videoGridRef.current.innerHTML =''
+        // cleanupAudioContext();
         setLoading(false);
         setJoined(false);
       },800)
