@@ -46,8 +46,8 @@ function AudioStream({ stream=""}) {
         try {
           const response = await axios.get("/music"); 
           if (response.data) {
-            setMusicList(response.data); 
-            setMusicUrl(`${base.URL}/${response.data[0].filePath}`); 
+            setMusicList([ { title: "No Songs Selected"  }, ...response.data]); 
+            // setMusicUrl(`${base.URL}/${response.data[0].filePath}`); 
           }
         } catch (error) {
           console.error("Error fetching music list:", error);
@@ -359,7 +359,6 @@ function AudioStream({ stream=""}) {
             return updatedPeers;
         });
     }
-    
     const call = useCallback((remotePeerId) => {
       setLoading(true); 
       if(!peerInstance.current._open && window.confirm('Your session is already active in another account. kindly do hard reload')) {
@@ -444,7 +443,7 @@ function AudioStream({ stream=""}) {
           })
           .catch((err) => console.error('Error starting call:', err));
       }, 1000);
-    }, [peerId, setLoading, connectToNewUser, usersMute]);
+    }, [peerId, setLoading, connectToNewUser, usersMute, musicUrl, audioRef.current]);
   
     const handleConnectClick = useCallback(() => {
       setIsButtonDisabled(true);
