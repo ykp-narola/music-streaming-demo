@@ -45,7 +45,7 @@ function AudioPlayerSection({ peerId, broadcastUser, togglePlayPause, isPlaying,
                 src={soundUrl}
                 controls 
                 loop 
-                className="w-full mt-2 hidden"
+                className="w-full mt-2"
             >
                 Your browser does not support the audio element.
             </audio>
