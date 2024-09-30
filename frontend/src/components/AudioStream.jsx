@@ -46,8 +46,8 @@ function AudioStream({ stream=""}) {
         try {
           const response = await axios.get("/music"); 
           if (response.data) {
-            setMusicList([ { title: "No Songs Selected"  }, ...response.data]); 
-            // setMusicUrl(`${base.URL}/${response.data[0].filePath}`); 
+            setMusicList(response.data); 
+            setMusicUrl(`${base.URL}/${response.data[0].filePath}`); 
           }
         } catch (error) {
           console.error("Error fetching music list:", error);
